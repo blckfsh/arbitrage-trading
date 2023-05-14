@@ -1,4 +1,3 @@
-import { expect } from "chai";
 import { ethers } from "hardhat";
 import { Contract, ContractFactory, BigNumber } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
@@ -19,7 +18,7 @@ describe("SwapExamples", () => {
   let balance: BigNumber;
 
   before(async () => {
-    [ signer1 ] = await ethers.getSigners();
+    [signer1] = await ethers.getSigners();
     accounts = [signer1];
 
     const SwapExamples: ContractFactory = await ethers.getContractFactory(
@@ -42,7 +41,7 @@ describe("SwapExamples", () => {
 
     // Swap
     await swapExamples.swapExactInputSingle(amountIn);
-    
+
     // format balance
     balance = await dai.balanceOf(accounts[0].address);
 
