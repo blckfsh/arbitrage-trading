@@ -9,22 +9,48 @@ contract SwapExamples {
     // NOTE: Does not work with SwapRouter02
     ISwapRouter public swapRouter;
 
-    address public token1; // DAI
-    address public token2; // token29
-    address public token3; // USDC 
+    address public adminRole;
+    address public swapRole;
 
-    constructor(address _swapRouterAddress, address _token1Address, address _token2Address, address _token3Address) {
+    address public token1;
+    address public token2;
+    address public token3;
+
+    constructor(
+        address _swapRouterAddress,
+        address _token1Address,
+        address _token2Address,
+        address _token3Address
+    ) {
+        adminRole = msg.sender;
+        swapRole = msg.sender;
         swapRouter = ISwapRouter(_swapRouterAddress);
         token1 = _token1Address;
         token2 = _token2Address;
         token3 = _token3Address;
     }
 
+    modifier onlyAdmin() {
+        require(adminRole == msg.sender, "Not Admin");
+        _;
+    }
+
+    modifier onlySwap() {
+        require(swapRole == msg.sender, "Not Swap Role");
+        _;
+    }
+
+    function setSwapRole(address _swapRoleAddress) onlyAdmin external {
+        swapRole = _swapRoleAddress;
+    }
+
     /// @notice Swaps a fixed amount of token2 for a maximum possible amount of token1
-    function swapExactInputSingle(uint amountIn, uint amountOutMinimum, uint24 fee1, uint160 sqrtPriceLimitX96)
-        external
-        returns (uint amountOut)
-    {
+    function swapExactInputSingle(
+        uint256 amountIn,
+        uint256 amountOutMinimum,
+        uint24 fee1,
+        uint160 sqrtPriceLimitX96
+    ) onlySwap external returns (uint256 amountOut) {
         TransferHelper.safeTransferFrom(
             token2,
             msg.sender,
@@ -34,36 +60,42 @@ contract SwapExamples {
         TransferHelper.safeApprove(token2, address(swapRouter), amountIn);
 
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter
-        .ExactInputSingleParams({
-            tokenIn: token2,
-            tokenOut: token1,
-            // pool fee 0.3% (3000)
-            fee: fee1,
-            recipient: msg.sender,
-            deadline: block.timestamp,
-            amountIn: amountIn,
-            amountOutMinimum: amountOutMinimum,
-            // NOTE: In production, this value can be used to set the limit
-            // for the price the swap will push the pool to,
-            // which can help protect against price impact
-            sqrtPriceLimitX96: sqrtPriceLimitX96
-            // NOTE: Research on this `sqrtPriceLimitX96` what could be the possible value
-        });
+            .ExactInputSingleParams({
+                tokenIn: token2,
+                tokenOut: token1,
+                // pool fee 0.3% (3000)
+                fee: fee1,
+                recipient: msg.sender,
+                deadline: block.timestamp,
+                amountIn: amountIn,
+                amountOutMinimum: amountOutMinimum,
+                // NOTE: In production, this value can be used to set the limit
+                // for the price the swap will push the pool to,
+                // which can help protect against price impact
+                sqrtPriceLimitX96: sqrtPriceLimitX96
+                // NOTE: Research on this `sqrtPriceLimitX96` what could be the possible value
+            });
         amountOut = swapRouter.exactInputSingle(params);
     }
 
     /// @notice swaps a minimum possible amount of token2 for a fixed amount of token1.
-    function swapExactOutputSingle(uint amountOut, uint amountInMaximum, uint24 fee1, uint160 sqrtPriceLimitX96)
-        external
-        returns (uint amountIn)
-    {
+    function swapExactOutputSingle(
+        uint256 amountOut,
+        uint256 amountInMaximum,
+        uint24 fee1,
+        uint160 sqrtPriceLimitX96
+    ) onlySwap external returns (uint256 amountIn) {
         TransferHelper.safeTransferFrom(
             token2,
             msg.sender,
             address(this),
             amountInMaximum
         );
-        TransferHelper.safeApprove(token2, address(swapRouter), amountInMaximum);
+        TransferHelper.safeApprove(
+            token2,
+            address(swapRouter),
+            amountInMaximum
+        );
 
         ISwapRouter.ExactOutputSingleParams memory params = ISwapRouter
             .ExactOutputSingleParams({
@@ -94,10 +126,11 @@ contract SwapExamples {
 
     /// @notice swapInputMultiplePools swaps a fixed amount of token2 for a maximum possible amount of token1
     /// swap token2 --> token3 --> token1
-    function swapExactInputMultihop(uint amountIn, uint24 fee1, uint24 fee2)
-        external
-        returns (uint amountOut)
-    {
+    function swapExactInputMultihop(
+        uint256 amountIn,
+        uint24 fee1,
+        uint24 fee2
+    ) onlySwap external returns (uint256 amountOut) {
         TransferHelper.safeTransferFrom(
             token2,
             msg.sender,
@@ -126,17 +159,23 @@ contract SwapExamples {
 
     /// @notice swapExactOutputMultihop swaps a minimum possible amount of token2 for a fixed amount of token3
     /// swap token2 --> token3 --> token1
-    function swapExactOutputMultihop(uint amountOut, uint amountInMaximum, uint24 fee1, uint24 fee2)
-        external
-        returns (uint amountIn)
-    {
+    function swapExactOutputMultihop(
+        uint256 amountOut,
+        uint256 amountInMaximum,
+        uint24 fee1,
+        uint24 fee2
+    ) onlySwap external returns (uint256 amountIn) {
         TransferHelper.safeTransferFrom(
             token2,
             msg.sender,
             address(this),
             amountInMaximum
         );
-        TransferHelper.safeApprove(token2, address(swapRouter), amountInMaximum);
+        TransferHelper.safeApprove(
+            token2,
+            address(swapRouter),
+            amountInMaximum
+        );
 
         // The parameter path is encoded as (tokenOut, fee, tokenIn/tokenOut, fee, tokenIn)
         ISwapRouter.ExactOutputParams memory params = ISwapRouter
