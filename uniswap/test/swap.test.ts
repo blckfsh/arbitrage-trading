@@ -1,7 +1,15 @@
 import { ethers } from "hardhat";
 import { Contract, ContractFactory, BigNumber } from "ethers";
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/signers";
-import { router, token1, token2, token3 } from "./common/constant";
+import {
+  factory,
+  router,
+  token1,
+  token2,
+  token3,
+  stable_decimals,
+  erc20_decimals,
+} from "./common/constant";
 
 describe("SwapExamples", () => {
   let accounts: SignerWithAddress[] = [];
@@ -35,22 +43,56 @@ describe("SwapExamples", () => {
     token3Contract = await ethers.getContractAt("IERC20", token3);
   });
 
+  // it("estimateAmountOut", async () => {
+  //   const fee: number = 3000;
+  //   const secondsAgo = 10; // 10 seconds
+
+  //   // initialize the pool
+  //   await swapExamples.initPool(factory, fee);
+
+  //   // get the price
+  //   const price = await swapExamples.estimateAmountOut(token2, token1, 10n ** erc20_decimals, secondsAgo);
+  //   console.log(`price: ${ethers.utils.formatEther(price.toString())}`);
+  // })
+
   it("swapExactInputSingle", async () => {
     const amountIn: bigint = 10n ** 18n; // 1
     const amountOutMinimum: number = 0;
     const fee1: number = 3000;
-    const sqrtPriceLimitX96: number = 0;
+    const secondsAgo = 10; // in seconds
+    let minPriceLimit;
+    let maxPriceLimit;
+    let calcMaxPrice: number;
+    let convertedCalcMaxPrice: BigNumber;
 
     // Deposit token2Contract
     await token2Contract.deposit({ value: amountIn });
     await token2Contract.approve(swapExamples.address, amountIn);
+
+    // initialize the pool
+    await swapExamples.initPool(factory, fee1);
+
+    // get the price
+    const price = await swapExamples.estimateAmountOut(
+      token2,
+      token1,
+      10n ** erc20_decimals,
+      secondsAgo
+    );
+    minPriceLimit = "1816000000000000000000";
+    maxPriceLimit = "1819000000000000000000";
+
+    // console.log(minPriceLimit);
+    // console.log(maxPriceLimit);
 
     // Swap
     await swapExamples.swapExactInputSingle(
       amountIn,
       amountOutMinimum,
       fee1,
-      sqrtPriceLimitX96
+      // sqrtPriceLimitX96,
+      // minPriceLimit,
+      // maxPriceLimit
     );
 
     // format balance
@@ -59,78 +101,75 @@ describe("SwapExamples", () => {
     console.log("token1 balance", ethers.utils.formatEther(balance.toString()));
   });
 
-  it("swapExactOutputSingle", async () => {
-    const token2ContractAmountInMax: bigint = 10n ** 18n; // 1
-    const token1ContractAmountOut: bigint = 100n * 10n ** 18n; // 100
-    const fee1: number = 3000;
-    const sqrtPriceLimitX96: number = 0;
+  // it("swapExactOutputSingle", async () => {
+  //   const token2ContractAmountInMax: bigint = 10n ** 18n; // 1
+  //   const token1ContractAmountOut: bigint = 100n * 10n ** 18n; // 100
+  //   const fee1: number = 3000;
+  //   const sqrtPriceLimitX96: number = 0;
 
-    // Deposit token2Contract
-    await token2Contract.deposit({ value: token2ContractAmountInMax });
-    await token2Contract.approve(
-      swapExamples.address,
-      token2ContractAmountInMax
-    );
+  //   // Deposit token2Contract
+  //   await token2Contract.deposit({ value: token2ContractAmountInMax });
+  //   await token2Contract.approve(
+  //     swapExamples.address,
+  //     token2ContractAmountInMax
+  //   );
 
-    // Swap
-    await swapExamples.swapExactOutputSingle(
-      token1ContractAmountOut,
-      token2ContractAmountInMax,
-      fee1,
-      sqrtPriceLimitX96
-    );
+  //   // Swap
+  //   await swapExamples.swapExactOutputSingle(
+  //     token1ContractAmountOut,
+  //     token2ContractAmountInMax,
+  //     fee1,
+  //     sqrtPriceLimitX96
+  //   );
 
-    // format balance
-    balance = await token1Contract.balanceOf(accounts[0].address);
+  //   // format balance
+  //   balance = await token1Contract.balanceOf(accounts[0].address);
 
-    console.log("token1 balance", ethers.utils.formatEther(balance.toString()));
-  });
+  //   console.log("token1 balance", ethers.utils.formatEther(balance.toString()));
+  // });
 
-  it("swapExactInputMultihop", async () => {
-    const amountIn = 10n ** 18n; // 1
-    const fee1: number = 3000;
-    const fee2: number = 100;
+  // it("swapExactInputMultihop", async () => {
+  //   const amountIn = 10n ** 18n; // 1
+  //   const fee1: number = 3000;
+  //   const fee2: number = 100;
 
-    // Deposit token2Contract
-    await token2Contract.deposit({ value: amountIn });
-    await token2Contract.approve(swapExamples.address, amountIn);
+  //   // Deposit token2Contract
+  //   await token2Contract.deposit({ value: amountIn });
+  //   await token2Contract.approve(swapExamples.address, amountIn);
 
-    // Swap
-    await swapExamples.swapExactInputMultihop(amountIn, fee1, fee2);
+  //   // Swap
+  //   await swapExamples.swapExactInputMultihop(amountIn, fee1, fee2);
 
-    // format balance
-    balance = await token1Contract.balanceOf(accounts[0].address);
+  //   // format balance
+  //   balance = await token1Contract.balanceOf(accounts[0].address);
 
-    console.log("token1 balance", ethers.utils.formatEther(balance.toString()));
-  });
+  //   console.log("token1 balance", ethers.utils.formatEther(balance.toString()));
+  // });
 
-  it("swapExactOutputMultihop", async () => {
-    const token2ContractAmountInMax = 10n ** 18n; // 1
-    const token1ContractAmountOut = 100n * 10n ** 18n; // 100
-    const fee1: number = 100;
-    const fee2: number = 3000;
+  // it("swapExactOutputMultihop", async () => {
+  //   const token2ContractAmountInMax = 10n ** 18n; // 1
+  //   const token1ContractAmountOut = 100n * 10n ** 18n; // 100
+  //   const fee1: number = 100;
+  //   const fee2: number = 3000;
 
-    // Deposit token2Contract
-    await token2Contract.deposit({ value: token2ContractAmountInMax });
-    await token2Contract.approve(
-      swapExamples.address,
-      token2ContractAmountInMax
-    );
+  //   // Deposit token2Contract
+  //   await token2Contract.deposit({ value: token2ContractAmountInMax });
+  //   await token2Contract.approve(
+  //     swapExamples.address,
+  //     token2ContractAmountInMax
+  //   );
 
-    // Swap
-    await swapExamples.swapExactOutputMultihop(
-      token1ContractAmountOut,
-      token2ContractAmountInMax,
-      fee1,
-      fee2
-    );
+  //   // Swap
+  //   await swapExamples.swapExactOutputMultihop(
+  //     token1ContractAmountOut,
+  //     token2ContractAmountInMax,
+  //     fee1,
+  //     fee2
+  //   );
 
-    // format balance
-    balance = await token1Contract.balanceOf(accounts[0].address);
+  //   // format balance
+  //   balance = await token1Contract.balanceOf(accounts[0].address);
 
-    console.log(
-      "token1 balance",
-      ethers.utils.formatEther(balance.toString())
-    );
-  });
+  //   console.log("token1 balance", ethers.utils.formatEther(balance.toString()));
+  // });
 });
