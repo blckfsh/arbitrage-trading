@@ -8,6 +8,8 @@ import {
   token1,
   token2,
   token3,
+  token4,
+  weth,
   stable_decimals,
   erc20_decimals,
 } from "./common/constant";
@@ -21,6 +23,7 @@ describe("Flashswap V3", () => {
   let token1Contract: Contract;
   let token2Contract: Contract;
   let token3Contract: Contract;
+  let wethContract: Contract;
 
   let balance: BigNumber;
   let tx;
@@ -40,18 +43,37 @@ describe("Flashswap V3", () => {
     const PairFlash: ContractFactory = await ethers.getContractFactory(
       "PairFlash"
     );
-    pairFlash = await PairFlash.deploy(swapExamples.address, factory, token2);
+    pairFlash = await PairFlash.deploy(
+      swapExamples.address,
+      factory,
+      token1,
+      token2,
+      token3,
+      token4,
+      weth
+    );
     await pairFlash.deployed();
 
     // Check if the contract is stable coin
+    if (token1 == "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2") {
+      token1Contract = await ethers.getContractAt("IWETH", token1);
+    } else {
+      token1Contract = await ethers.getContractAt("IERC20", token1);
+    }
+
     if (token2 == "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2") {
       token2Contract = await ethers.getContractAt("IWETH", token2);
     } else {
       token2Contract = await ethers.getContractAt("IERC20", token2);
     }
 
-    token1Contract = await ethers.getContractAt("IERC20", token1);
-    token3Contract = await ethers.getContractAt("IERC20", token3);
+    if (token3 == "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2") {
+      token3Contract = await ethers.getContractAt("IWETH", token3);
+    } else {
+      token3Contract = await ethers.getContractAt("IERC20", token3);
+    }
+
+    wethContract = await ethers.getContractAt("IWETH", weth);
   });
 
   it("call flashswap", async () => {
@@ -63,12 +85,12 @@ describe("Flashswap V3", () => {
       gasLimit: ethers.utils.hexlify(50000),
     };
 
-    tx = await token2Contract.connect(signer1).deposit(overrides);
+    tx = await wethContract.connect(signer1).deposit(overrides);
     await tx.wait();
 
     // get some DAI
     // approve swaper to spend 2 WETH
-    tx = await token2Contract
+    tx = await wethContract
       .connect(signer1)
       .approve(swapExamples.address, ethers.utils.parseEther("2"));
     await tx.wait();
@@ -91,7 +113,7 @@ describe("Flashswap V3", () => {
     tx = await swapExamples
       .connect(signer1)
       .swapExactInputSingle(
-        token2,
+        weth,
         token1,
         amountIn,
         amountOutMinimum,
@@ -103,11 +125,13 @@ describe("Flashswap V3", () => {
     const balance_before = ethers.utils.formatEther(
       await token1Contract.balanceOf(signer1.address)
     );
-    // transfer 100 DAI to contract so that it can pay for the fees (bc we flash for a loss lol)
+    
+    // transfer 1000 DAI to contract so that it can pay for the fees (bc we flash for a loss lol)
     // extra $$ (after fees) will be payed back
     tx = await token1Contract
       .connect(signer1)
-      .transfer(pairFlash.address, ethers.utils.parseEther("20"));
+      .transfer(pairFlash.address, ethers.utils.parseEther("200"));
+      // .transfer(pairFlash.address, ethers.utils.parseEther(balance_before.toString()));
     await tx.wait();
 
     // FLASH SWAP
@@ -127,10 +151,11 @@ describe("Flashswap V3", () => {
     const balance_after = ethers.utils.formatEther(
       await token1Contract.balanceOf(signer1.address)
     );
-    console.log("Balance Before: %s DAI", Number(balance_before));
-    console.log("Balance After: %s DAI", Number(balance_after));
+  
+    console.log("Balance Before: %s", Number(balance_before));
+    console.log("Balance After: %s", Number(balance_after));
     console.log(
-      "Total Flash Change in Balance: %s DAI",
+      "Total Flash Change in Balance: %s",
       Number(balance_before) - Number(balance_after)
     );
   });

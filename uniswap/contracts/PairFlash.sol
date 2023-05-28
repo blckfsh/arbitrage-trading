@@ -41,28 +41,29 @@ contract PairFlash is IUniswapV3FlashCallback, PeripheryImmutableState, Peripher
     using LowGasSafeMath for uint256;
     using LowGasSafeMath for int256;
 
-    address public USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address public DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address public WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address public third_token;
+    address public first_token;
+    address public second_token;
+    address public fourth_token;
+
+    bool public isSwapExactInput = true;
 
     SwapExamples2 public immutable swaper;
 
     constructor(
         SwapExamples2 swapAddress_,
         address factory_,
+        address token1_,
+        address token2_,
+        address token3_,
+        address token4_,
         address WETH9_
     ) PeripheryImmutableState(factory_, WETH9_) {
         swaper = swapAddress_;
-    }
-
-    // COMMENTED: NOT NEEDED AT THE MOMENT
-    // function transfer_wrapper(address token1_, address token2_, uint amount_swap_) private returns (uint amount_out_){
-    //     TransferHelper.safeApprove(token1_, address(swaper), amount_swap_); // approve swaper to spend token 
-    //     amount_out_ = swaper.swapTokenMax(token1_, token2_, amount_swap_); // swap between tokens with uniswap         
-    // }
-
-    function doApprove(address token_, uint256 amount_) private {
-        TransferHelper.safeApprove(token_, address(swaper), amount_); // approve swaper to spend token 
+        first_token = token1_;
+        second_token = token2_;
+        third_token = token3_;
+        fourth_token = token4_;
     }
 
     /// @param fee0 The fee from calling flash for token0
@@ -86,49 +87,34 @@ contract PairFlash is IUniswapV3FlashCallback, PeripheryImmutableState, Peripher
 
         uint amount_swap = decoded.amount0; // flash swap amount DAI 
 
-        // DAI -> WETH
-        doApprove(DAI, amount_swap);
-        uint swap_out = swaper.swapExactInputSingle(DAI, WETH, amount_swap, 0, 3000, 0);
-        console.log("--- after DAI -> WETH swap ---");
-        log_balances();
-
-        // WETH -> USDC -> DAI
-        doApprove(WETH, swap_out);
-        swaper.swapExactInputMultihop(WETH, USDC, DAI, swap_out, 3000, 100);
-        console.log("--- after WETH -> USDC -> DAI swap ---");
-        log_balances();
-
-        // // DAI -> WETH
-        // uint swap_out = transfer_wrapper(DAI, WETH, amount_swap);
-        // console.log("--- after DAI -> WETH swap ---");
-        // log_balances();
-                
-        // // WETH -> USDC 
-        // swap_out = transfer_wrapper(WETH, USDC, swap_out);
-        // console.log("--- after WETH -> USDC swap ---");
-        // log_balances();
-
-        // // USDC -> DAI 
-        // swap_out = transfer_wrapper(USDC, DAI, swap_out);
-        // console.log("--- after USDC -> DAI swap ---");
-        // log_balances();
+        if (isSwapExactInput) {
+            doExactInput(amount_swap);
+        } else {
+            doExactOutput(amount_swap);
+        }
         
         // compute amount to pay back to pool 
-        // (amount loaned) + fee
+        // (amount loaned) + fee        
         uint256 amount0Owed = LowGasSafeMath.add(decoded.amount0, fee0);
         uint256 amount1Owed = LowGasSafeMath.add(decoded.amount1, fee1);
+        console.log("--- checking amount owed ---");
+        console.log("Amount 0 owed: ", amount0Owed);
+        console.log("Amount 1 owed: ", amount1Owed);
 
         // pay back pool the loan 
         // note: msg.sender == pool to pay back 
+        console.log("--- checking conditions ---");
         if (amount0Owed > 0) pay(token0, address(this), msg.sender, amount0Owed);
+        console.log("Condition 1 Good");
         if (amount1Owed > 0) pay(token1, address(this), msg.sender, amount1Owed);
+        console.log("Condition 2 Good");
     }
 
     /// @param params The parameters necessary for flash and the callback, passed in as FlashParams
     /// @notice Calls the pools flash function with data needed in `uniswapV3FlashCallback`
-    function initFlash(FlashParams memory params) external {
+    function initFlash(FlashParams memory params) external {                
         PoolAddress.PoolKey memory poolKey =
-            PoolAddress.PoolKey({token0: params.token0, token1: params.token1, fee: params.fee1});
+            PoolAddress.PoolKey({token0: params.token0, token1: params.token1, fee: params.fee1});            
         IUniswapV3Pool pool = IUniswapV3Pool(PoolAddress.computeAddress(factory, poolKey));
 
         console.log("--- init balances ---");
@@ -153,9 +139,9 @@ contract PairFlash is IUniswapV3FlashCallback, PeripheryImmutableState, Peripher
         );
 
         // send the rest of the balance back to the sender         
-        IERC20(DAI).transfer(msg.sender, IERC20(DAI).balanceOf(address(this)));
-        IERC20(WETH).transfer(msg.sender, IERC20(WETH).balanceOf(address(this)));
-        IERC20(USDC).transfer(msg.sender, IERC20(USDC).balanceOf(address(this)));
+        // IERC20(first_token).transfer(msg.sender, IERC20(first_token).balanceOf(address(this)));
+        // IERC20(second_token).transfer(msg.sender, IERC20(second_token).balanceOf(address(this)));
+        // IERC20(third_token).transfer(msg.sender, IERC20(third_token).balanceOf(address(this)));
 
         console.log("--- empty contract ---");
         log_balances();
@@ -163,15 +149,49 @@ contract PairFlash is IUniswapV3FlashCallback, PeripheryImmutableState, Peripher
         console.log("flash success!");
     }
 
+    function doApprove(address token_, uint256 amount_) private {
+        TransferHelper.safeApprove(token_, address(swaper), amount_); // approve swaper to spend token 
+    }
+
+    function doExactInput(uint256 amount_) private {
+        // DAI -> WETH
+        doApprove(first_token, amount_);
+        uint swap_out = swaper.swapExactInputSingle(first_token, second_token, amount_, 0, 3000, 0);
+        console.log("--- after DAI -> WETH swap ---");
+        log_balances();
+
+        // WETH -> USDC -> DAI
+        doApprove(second_token, swap_out);
+        swaper.swapExactInputMultihop(second_token, third_token, first_token, swap_out, 3000, 100);
+        console.log("--- after WETH -> USDC -> DAI swap ---");
+        log_balances();
+    }
+
+    function doExactOutput(uint256 amount_) private {
+        // DAI -> WETH
+        doApprove(first_token, amount_);
+        uint swap_out = swaper.swapExactOutputSingle(first_token, second_token, 500000000000000000, amount_, 3000, 0);
+        console.log("--- after DAI -> WETH swap ---");
+        log_balances();
+
+        // WETH -> USDC -> DAI
+        doApprove(second_token, swap_out);
+        swaper.swapExactOutputMultihop(second_token, third_token, first_token, 1000000000000000000000, swap_out, 3000, 3000);
+        console.log("--- after WETH -> USDC -> DAI swap ---");
+        log_balances();
+    }
+
     function log_balances() view private {
-        uint balance_weth = IERC20(WETH).balanceOf(address(this));
-        uint balance_dai = IERC20(DAI).balanceOf(address(this));
-        uint balance_usdc = IERC20(USDC).balanceOf(address(this));
+        uint balance_token1 = IERC20(first_token).balanceOf(address(this));
+        uint balance_token2 = IERC20(second_token).balanceOf(address(this));
+        uint balance_token3 = IERC20(third_token).balanceOf(address(this));
+        uint balance_token4 = IERC20(fourth_token).balanceOf(address(this));
         // DAI is in scale 1 * 10^18 wei = 1 ether
         // USDC is in scale 1 * 10^6
         // since solidity doesn't print floats we must hack >:)
-        console.log("WETH: %s.%s", balance_weth / 1e18, balance_weth - (balance_weth / 1e18) * 1e18); 
-        console.log("DAI: %s.%s", balance_dai / 1e18, balance_dai - (balance_dai / 1e18) * 1e18);
-        console.log("USDC: %s.%s", balance_usdc / 1e6, balance_usdc - (balance_usdc / 1e6) * 1e6);
+        console.log("token 1: %s.%s", balance_token1 / 1e18, balance_token1 - (balance_token1 / 1e18) * 1e18);
+        console.log("token 2: %s.%s", balance_token2 / 1e18, balance_token2 - (balance_token2 / 1e18) * 1e18);         
+        console.log("token 3: %s.%s", balance_token3 / 1e6, balance_token3 - (balance_token3 / 1e6) * 1e6);        
+        console.log("token 4: %s.%s", balance_token4 / 1e6, balance_token4 - (balance_token4 / 1e6) * 1e6);        
     }
 }

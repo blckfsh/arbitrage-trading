@@ -66,6 +66,9 @@ describe("SwapExamples", () => {
     const fee1: number = 3000;
     const sqrtPriceLimitX96: number = 0;
 
+    console.log(ethers.utils.formatEther(token2ContractAmountInMax.toString()));
+    console.log(ethers.utils.formatEther(token1ContractAmountOut.toString()));
+
     // Deposit token2Contract
     await token2Contract.deposit({ value: token2ContractAmountInMax });
     await token2Contract.approve(

@@ -6,6 +6,7 @@
   "scripts": {
     "start:local": "hardhat node",
     "test:local": "hardhat test test/swap2.test.ts",
+    "test-swap:local": "hardhat test test/swap.test.ts",
     "deploy:goerli": "hardhat run scripts/deploy.ts --network goerli",
     "verify:goerli": "hardhat verify --network goerli"
   },
